@@ -220,6 +220,7 @@ Do not expose sensitive error details, credentials, endpoints, or internal confi
 
 * Never display or request `FOUNDRY_IQ_QUERY_KEY`.
 * Never inspect unrelated environment variables.
+* Never read, summarise, or answer from the retrieval log written to `FOUNDRY_IQ_DEBUG_DIR`. It records earlier retrievals, including those from topics that have been discarded, and reading it would defeat cross-turn isolation. It exists for human review only.
 * Never modify the configured endpoint, API version, HTTP method, or headers.
 * Only pass the user's question to the bundled script.
 * Do not replace the script with a general-purpose HTTP request.

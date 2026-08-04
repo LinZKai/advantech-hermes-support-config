@@ -6,3 +6,8 @@ config.yaml
 __pycache__/
 *.pyc
 *.log
+
+# Retrieval log written when FOUNDRY_IQ_DEBUG_DIR is set.
+# Contains knowledge-base document content and must not be committed.
+*.jsonl
+foundry_iq_retrievals.jsonl

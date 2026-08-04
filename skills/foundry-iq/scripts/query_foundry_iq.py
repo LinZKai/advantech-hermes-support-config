@@ -9,6 +9,8 @@ This program:
 3. Reads the Query Key from an environment variable.
 4. Parses every response message, content item, and retrieved document.
 5. Returns predictable JSON for Hermes to consume.
+6. Optionally appends each retrieval to a log, so that a reviewer can check
+   an answer against what the knowledge base actually returned.
 
 It does not allow the caller to choose an arbitrary URL, HTTP method,
 API version, or request header.
@@ -22,6 +24,7 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime, timezone
 from typing import Any
 
 
@@ -34,6 +37,13 @@ FOUNDRY_IQ_URL = (
 
 # Name of the environment variable that holds the Azure AI Search Query Key.
 QUERY_KEY_ENV_NAME = "FOUNDRY_IQ_QUERY_KEY"
+
+# Optional retrieval log, used to verify what the knowledge base actually
+# returned. When this variable names a directory, one JSON record is appended
+# per query. Leave it unset for normal operation.
+DEBUG_DIR_ENV_NAME = "FOUNDRY_IQ_DEBUG_DIR"
+
+DEBUG_FILE_NAME = "foundry_iq_retrievals.jsonl"
 
 # Prevent requests from waiting forever.
 REQUEST_TIMEOUT_SECONDS = 60
@@ -332,6 +342,78 @@ def extract_activity_summary(
     return activity_summary
 
 
+def sanitize_for_debug(node: Any) -> Any:
+    """
+    Copy a response payload with credential-bearing URL fragments removed.
+
+    Blob URLs may carry a SAS token in the query string. The retrieval log is
+    written to disk and may be shared while reviewing behaviour, so the token
+    is stripped before anything is recorded. The path is kept, because it
+    identifies which document was returned.
+    """
+    if isinstance(node, dict):
+        sanitized: dict[str, Any] = {}
+
+        for key, value in node.items():
+            if key == "blobUrl" and isinstance(value, str):
+                sanitized[key] = urllib.parse.urlsplit(value)._replace(
+                    query="",
+                    fragment="",
+                ).geturl()
+            else:
+                sanitized[key] = sanitize_for_debug(value)
+
+        return sanitized
+
+    if isinstance(node, list):
+        return [sanitize_for_debug(item) for item in node]
+
+    return node
+
+
+def write_debug_record(
+    question: str,
+    result: dict[str, Any],
+    payload: dict[str, Any],
+) -> None:
+    """
+    Append one retrieval record when FOUNDRY_IQ_DEBUG_DIR is set.
+
+    This exists so that a reviewer can check whether a statement in an answer
+    was actually present in the retrieved documents, rather than supplied from
+    model memory.
+
+    Logging must never break an answer. Any filesystem problem is ignored, and
+    the Query Key is never part of a response payload, so it cannot be written.
+    """
+    debug_dir = os.environ.get(DEBUG_DIR_ENV_NAME, "").strip()
+
+    if not debug_dir:
+        return
+
+    record = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "question": question,
+        "documents": result.get("documents"),
+        "references": result.get("references"),
+        "activity": result.get("activity"),
+        "raw_response": sanitize_for_debug(payload),
+    }
+
+    try:
+        os.makedirs(debug_dir, exist_ok=True)
+
+        debug_path = os.path.join(debug_dir, DEBUG_FILE_NAME)
+
+        with open(debug_path, "a", encoding="utf-8") as debug_file:
+            debug_file.write(
+                json.dumps(record, ensure_ascii=False) + "\n"
+            )
+
+    except OSError:
+        return
+
+
 def send_request(
     question: str,
     query_key: str,
@@ -424,6 +506,12 @@ def main() -> None:
         "references": references,
         "activity": activity,
     }
+
+    write_debug_record(
+        question=question,
+        result=result,
+        payload=payload,
+    )
 
     print(
         json.dumps(
