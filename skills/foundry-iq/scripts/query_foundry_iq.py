@@ -20,6 +20,7 @@ import json
 import os
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from typing import Any
 
@@ -242,6 +243,26 @@ def extract_retrieved_documents(
     return all_documents
 
 
+def extract_source_name(blob_url: Any) -> str | None:
+    """
+    Reduce an internal Blob URL to a bare document file name.
+
+    Hermes is required to cite the source document but must never expose
+    internal storage locations, so the container path, host, and any query
+    string are removed here rather than relying on prompt instructions.
+
+    "https://acct.blob.core.windows.net/kb/faq/ADAM-6233%20SNMP.pdf?sv=..."
+    becomes "ADAM-6233 SNMP.pdf".
+    """
+    if not isinstance(blob_url, str):
+        return None
+
+    path = urllib.parse.urlsplit(blob_url).path
+    file_name = urllib.parse.unquote(path.rsplit("/", 1)[-1]).strip()
+
+    return file_name or None
+
+
 def extract_references(
     payload: dict[str, Any],
 ) -> list[dict[str, Any]]:
@@ -249,7 +270,8 @@ def extract_references(
     Return non-secret reference metadata.
 
     This can help Hermes understand which retrieved document corresponds
-    to a ref_id. The Query Key and request headers are never included.
+    to a ref_id. The Query Key, request headers, and internal Blob URLs
+    are never included.
     """
     raw_references = payload.get("references", [])
 
@@ -266,7 +288,9 @@ def extract_references(
             {
                 "id": raw_reference.get("id"),
                 "type": raw_reference.get("type"),
-                "blob_url": raw_reference.get("blobUrl"),
+                "source_name": extract_source_name(
+                    raw_reference.get("blobUrl")
+                ),
                 "reranker_score": raw_reference.get("rerankerScore"),
             }
         )
