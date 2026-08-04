@@ -1,7 +1,7 @@
 ---
 name: foundry-iq
 description: "Use for Advantech product, command, configuration, compatibility, troubleshooting, or technical FAQ questions that must be answered from the Foundry IQ knowledge base."
-version: 1.4.0
+version: 1.5.0
 author: Hermes Agent
 license: MIT
 platforms: [linux]
@@ -75,11 +75,17 @@ Rules:
 * If the referent is ambiguous — for example two product models have been discussed and the turn does not indicate which one — do not guess. Ask one clarifying question instead of retrieving.
 * Do not resolve a NEW_TOPIC turn against the previous topic. When in doubt about whether a turn is NEW_TOPIC or FOLLOW_UP, ask rather than assume continuity.
 
-When a query was resolved, state the query actually sent on a single line before the answer, so the user can catch an incorrect resolution:
+### Turn diagnostics
 
-`查詢：ADAM-6233 如何關閉 SNMP`
+While this configuration is being validated, begin every answer with one line stating the classification and what was sent to Foundry IQ:
 
-Do not display this line when the user's question was sent unchanged.
+* `[NEW_TOPIC] 查詢：ADAM-6266 SNMP 設定方式`
+* `[FOLLOW_UP] 查詢：ADAM-6233 如何關閉 SNMP`
+* `[IN_SCOPE] 未重新查詢，來源：ADAM-6233 SNMP.pdf`
+
+This line lets a reviewer confirm that the turn was classified correctly and that an abbreviated question was resolved into the intended query.
+
+It is a verification aid for the current phase, not a permanent part of the answer format, and is expected to be removed once the behaviour is trusted.
 
 ### Cross-turn isolation
 
@@ -169,20 +175,36 @@ Clearly label them as:
 
 Never use general knowledge to supply missing Advantech commands, compatibility claims, configuration values, or troubleshooting procedures.
 
+## Asking for Missing Information
+
+Ask only when the missing detail actually determines the answer. Ask about one thing per turn.
+
+Retrieve first whenever the question is searchable. Ask before retrieving only when the question names no product and would clearly return unrelated results, such as a bare `無法連線怎麼辦`.
+
+### Shape of a good question
+
+1. Give the part you can already confirm. A gap on one point does not justify withholding the rest.
+2. Say why it is not enough to complete the answer.
+3. Ask.
+
+When the retrieved documents themselves reveal the choice, offer it instead of asking an open question:
+
+> 找到 ADAM-6233 與 ADAM-6266 兩份設定說明，兩者步驟不同。請問你使用的是哪一款？
+
+This is better than `請提供產品型號`, because the options come from the retrieval rather than from a generic checklist.
+
+### Do not ask
+
+* For details that would not change the answer.
+* For anything already established in the Active Topic.
+
 ## Failure Handling
 
 ### Knowledge base has insufficient information
 
 State clearly that the current knowledge base does not provide enough information.
 
-Ask for the single most useful missing detail, such as:
-
-* Product model
-* Hardware or firmware version
-* Software version
-* Connection method
-* Operating environment
-* Exact error message
+Then ask for the single most useful missing detail, following **Asking for Missing Information** above. The useful detail is usually the product model, hardware or firmware version, software version, connection method, operating environment, or the exact error message.
 
 Do not provide a speculative product-specific solution.
 
