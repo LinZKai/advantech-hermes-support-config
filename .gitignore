@@ -7,7 +7,9 @@ __pycache__/
 *.pyc
 *.log
 
-# Retrieval log written when FOUNDRY_IQ_DEBUG_DIR is set.
-# Contains knowledge-base document content and must not be committed.
+# Retrieval log. Contains knowledge-base document content and must not be
+# committed. The logs/ directory is what switches logging on, so it stays
+# local to whoever is reviewing.
 *.jsonl
 foundry_iq_retrievals.jsonl
+logs/

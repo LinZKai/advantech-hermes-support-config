@@ -39,9 +39,19 @@ FOUNDRY_IQ_URL = (
 QUERY_KEY_ENV_NAME = "FOUNDRY_IQ_QUERY_KEY"
 
 # Optional retrieval log, used to verify what the knowledge base actually
-# returned. When this variable names a directory, one JSON record is appended
-# per query. Leave it unset for normal operation.
+# returned.
+#
+# Logging is off unless one of the following is true:
+#
+# 1. FOUNDRY_IQ_DEBUG_DIR names a directory, or
+# 2. a directory named `logs` exists beside this script's skill folder.
+#
+# The second form exists because the log destination is a plain path, not a
+# secret, and does not belong in a credential store. Creating the directory
+# turns logging on; removing or renaming it turns logging off.
 DEBUG_DIR_ENV_NAME = "FOUNDRY_IQ_DEBUG_DIR"
+
+DEBUG_DIR_NAME = "logs"
 
 DEBUG_FILE_NAME = "foundry_iq_retrievals.jsonl"
 
@@ -371,13 +381,38 @@ def sanitize_for_debug(node: Any) -> Any:
     return node
 
 
+def resolve_debug_dir() -> str | None:
+    """
+    Decide where, if anywhere, the retrieval log should be written.
+
+    The environment variable wins when it is set. Otherwise a `logs` directory
+    beside the skill folder enables logging simply by existing, which keeps a
+    non-secret path out of the credential provider.
+    """
+    configured_dir = os.environ.get(DEBUG_DIR_ENV_NAME, "").strip()
+
+    if configured_dir:
+        return configured_dir
+
+    skill_dir = os.path.dirname(
+        os.path.dirname(os.path.abspath(__file__))
+    )
+
+    default_dir = os.path.join(skill_dir, DEBUG_DIR_NAME)
+
+    if os.path.isdir(default_dir):
+        return default_dir
+
+    return None
+
+
 def write_debug_record(
     question: str,
     result: dict[str, Any],
     payload: dict[str, Any],
 ) -> None:
     """
-    Append one retrieval record when FOUNDRY_IQ_DEBUG_DIR is set.
+    Append one retrieval record when logging is enabled.
 
     This exists so that a reviewer can check whether a statement in an answer
     was actually present in the retrieved documents, rather than supplied from
@@ -386,7 +421,7 @@ def write_debug_record(
     Logging must never break an answer. Any filesystem problem is ignored, and
     the Query Key is never part of a response payload, so it cannot be written.
     """
-    debug_dir = os.environ.get(DEBUG_DIR_ENV_NAME, "").strip()
+    debug_dir = resolve_debug_dir()
 
     if not debug_dir:
         return
