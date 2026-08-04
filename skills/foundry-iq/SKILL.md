@@ -1,7 +1,7 @@
 ---
 name: foundry-iq
 description: "Use for Advantech product, command, configuration, compatibility, troubleshooting, or technical FAQ questions that must be answered from the Foundry IQ knowledge base."
-version: 1.5.0
+version: 1.6.0
 author: Hermes Agent
 license: MIT
 platforms: [linux]
@@ -58,7 +58,11 @@ Never add a value to the Active Topic that has not appeared in the conversation 
 1. Do not retrieve.
 2. Answer from those documents and identify which document supplies the answer.
 
-Reuse without retrieval is permitted only when the answer text is actually present in a currently valid document. A related fact is not the same fact: if the valid documents describe how to enable a feature but say nothing about disabling it, the turn is FOLLOW_UP, not IN_SCOPE.
+Reuse without retrieval is permitted only when the answer text is actually present in a currently valid document.
+
+The clearest case for IN_SCOPE is a value the previous answer already reported from a document that is still valid. If the previous turn gave a configuration table taken from one document and this turn asks for one field of that table, retrieving again adds nothing. Answer directly and name the document.
+
+The clearest case against IN_SCOPE is a related but different fact. If the valid documents describe how to enable a feature but say nothing about disabling it, the turn is FOLLOW_UP.
 
 ### Query resolution for FOLLOW_UP turns
 
@@ -84,6 +88,10 @@ While this configuration is being validated, begin every answer with one line st
 * `[IN_SCOPE] 未重新查詢，來源：ADAM-6233 SNMP.pdf`
 
 This line lets a reviewer confirm that the turn was classified correctly and that an abbreviated question was resolved into the intended query.
+
+The line must describe what actually happened. A turn that carried a product model over from the previous turn is `[FOLLOW_UP]`, whatever else it may resemble; `[NEW_TOPIC]` means the question was sent as the user wrote it. A line that misreports the turn is worse than no line at all, because the whole point of it is that a reviewer can trust it.
+
+Write the line on its own, before the answer, with a blank line after it, so it cannot merge into the first sentence.
 
 It is a verification aid for the current phase, not a permanent part of the answer format, and is expected to be removed once the behaviour is trusted.
 
@@ -133,22 +141,44 @@ If the question is reasonably searchable, retrieve first. Ask for clarification 
 Do not alter, normalize, infer, or invent:
 
 * Product model names
+* Utility and software names
 * Commands and command syntax
 * Firmware or software versions
 * Port numbers and addresses
 * User names or passwords
-* Node IDs
+* Node IDs and node paths
 * Security modes
-* Expected device responses
+* Expected device responses and on-screen messages
 * Configuration values
+* Menu paths, tab and panel names, button labels, and field names
+
+The last item is the one most easily missed. A step such as "open Config → OPC Connections" reads as harmless assistance, but it is a product claim: the customer will look for that path. If the document says only "open the utility", the answer says only that.
+
+A terse document produces a terse answer. Do not complete a procedure the document leaves incomplete, and do not correct a step that looks wrong to you. If a document appears to contain an error, describe what it says and note the discrepancy.
 
 ### Keep document boundaries
 
 Do not combine commands, values, or procedures from different documents, or from different retrievals, unless the retrieved content explicitly supports the relationship.
 
+Where one document leaves a field unspecified, do not fill it with a value taken from another document. If a procedure says only "configure the security parameters", that is the whole of what is known, even when another document states specific security parameters for a similar setup.
+
 If documents provide conflicting instructions, describe the conflict and identify the model, version, or environment associated with each instruction.
 
+### Examples, defaults, and generalisation
+
+A value that appears in a document as an example is not a default. Never present a credential, address, or name shown in an example or a screenshot as the applicable default. Label it as a document example unless the retrieved source explicitly identifies it as the default for that exact model and function.
+
+Never invent an example. Do not generate sample IP addresses, host names, device names, tag names, or endpoint strings that the retrieved documents do not contain. If an illustration genuinely helps, mark it plainly as your own illustration — and never attribute it to a document.
+
+Only write "the document states", "文件指出", or any equivalent when the wording is actually present in the retrieved text. This applies with equal force to claims about figures and screenshots, whose contents you cannot see.
+
+If a source covers one firmware version, one channel, or one function, do not generalise the finding to all versions, channels, or settings.
+
+When the user reports a firmware or software version, compare it explicitly with the affected range named in the source. If the source names only a different version, say that the user's version is not confirmed as affected. Present an upgrade path as the remediation the document records, not as proof that the cause has been identified.
+
 ### Response format
+
+Begin with the turn diagnostics line described above. Every answer, including one that only asks a clarifying question.
 
 Put the direct answer first.
 
