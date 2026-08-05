@@ -6,6 +6,25 @@
 
 **注意**：預期內容是根據以下六份文件推導的。知識庫中還有數百份其他文件，檢索可能合理地帶回額外資訊，這不算失敗；失敗指的是與這六份文件牴觸、或把不同文件的內容混在一起。
 
+## 判讀前必讀：不要只比對文字層
+
+本檔的判定標準曾經有數項是錯的，原因值得記下來。
+
+知識庫的每份 PDF 並非只存文字。ingestion 會對圖片跑視覺模型，把 Fig.1～Fig.8 的內容轉成文字描述，與文字層一起切成 chunk 存入。一次檢索可能回傳 20～25 個 chunk，其中相當比例是圖片描述。
+
+早期評分時只用 `pdftotext` 抽文字層去比對，因此把好幾個**確實存在於知識庫**的值判成捏造：
+
+| 曾被誤判為捏造 | 實際位置 |
+|---|---|
+| `opc.tcp://10.0.0.1:4840` | D1 的 endpoint 選擇畫面描述 |
+| `None - None (uatcp-uasc-ua)` | 同上 |
+| `Digital_Input`／`Digital_Output`／`DI_00_DIValue`／`DI_01_DIValue` | D1 的 Address Space 畫面描述 |
+| WebAccess 的 Security Policy `Basic128Rsa15`、Security Mode `Sign`、Authentication | D3 的 Fig.8／Fig.9 描述 |
+
+**判定任何內容是否為捏造之前，一律先查檢索紀錄**（`logs/foundry_iq_retrievals.jsonl`），不要只憑 PDF 的文字層。相關指令見本檔末。
+
+同時要記得：圖片描述中的值是二手的——由模型讀圖產生，且記錄的是某位工程師的測試環境。`10.0.0.1` 就是這樣一個值。它存在於知識庫，但不是任何人的預設值。
+
 | 代號 | 文件 |
 |---|---|
 | D1 | IAG_FAQ_ADAM-6300_How to acquire IO data via UAexpert |
@@ -28,9 +47,12 @@ D1 與 D2 的步驟幾乎逐字相同，是本劇本主要的污染陷阱。D3 �
 **應該出現**：D1 的五個步驟——在 UAexpert 的 Custom Discovery 新增 OPC UA server、選擇連線類型（anonymous/None 或 security/Basic128Rsa15-Sign）並填帳密、連線後信任 ADAM-6350 送來的憑證、到 Adam/Apax .NET Utility 的 Certificates 頁籤信任被拒絕的 UAexpert 憑證、最後展開樹狀結構把 tag 拖曳到 Data Access View 監看。
 
 **失敗徵兆**：
-- 出現 Ignition 或 WebAccess/SCADA 的字眼。D1 D2 高度相似，若檢索同時帶回兩份而 agent 沒有區分，會混講。
-- 出現 `4840`、`DI_00_DIValue`、`ObjectSFolder`、`DigitalInput`。**這些只存在於 D3**，D1 全文沒有任何 port 號或 node 路徑。若在 UAexpert 的回答中出現，就是跨文件污染。
-- 出現任何具體 IP 範例。六份文件皆無。
+- 出現 Ignition 或 WebAccess/SCADA 的**流程步驟**。D1 D2 高度相似，若檢索同時帶回兩份而 agent 沒有區分，會混講。
+- 出現 `ObjectSFolder` 開頭的完整 node path（`1:1:/ObjectSFolder/...`）。這個格式是 WebAccess 的 tag 位址寫法，只在 D3，不屬於 UAexpert 流程。
+- 把 `10.0.0.1` 當成該填的值，而非明確說明那是文件截圖中的示範環境。
+
+**以下不是失敗徵兆**（曾誤列，見前述說明）：
+- `4840`、`opc.tcp://`、`Digital_Input`、`DI_00_DIValue`、`10.0.0.1` 本身。這些都在 D1 的圖片描述中，引用它們是有依據的。
 
 ---
 
@@ -78,9 +100,15 @@ D1 與 D2 的步驟幾乎逐字相同，是本劇本主要的污染陷阱。D3 �
 
 **預期分類**：`[FOLLOW_UP]` 或 `[NEW_TOPIC]` 皆可接受，重點是有重新檢索。
 
-**應該出現**：D3 的 Step 4——device type 選 OPCUA、maximal monitor item per communication 設為 200、username/password 為 root/0000000、Primary 填 ADAM-6350 的 IP，port 為 4840。前面步驟為建立 SCADA 專案、新增 node、新增 TCPIP port。
+**應該出現**：D3 的 Step 4——device type 選 OPCUA、maximal monitor item per communication 設為 200、username/password 為 root/0000000、Primary 填 ADAM-6350 的 IP，port 為 4840。前面步驟為建立 SCADA 專案、新增 node、新增 TCPIP port，後面為下載專案、啟動 Kernel、信任憑證、ViewDAQ 驗證。
 
-**失敗徵兆**：把 D1 D2 的「信任憑證」步驟混進 WebAccess 流程，D3 並無此步驟。
+**Security Policy / Security Mode / Authentication 的具體值**（`Basic128Rsa15` / `Sign` / UserName）**在 D3 的 Fig.8 描述裡**。給出這些值不算失敗，但應說明來自文件圖示。若該次檢索沒有回傳那個 chunk，正確說法是「本次檢索未回傳」，不是「文件未指定」。
+
+**失敗徵兆**：
+- 說「文件未指定 Security 參數」而未限定於本次檢索範圍。
+- 把 root/0000000 講成出廠預設值而非文件範例。
+
+**曾誤列**：「把信任憑證步驟混進 WebAccess 流程」——D3 的 Step7 本來就有這個步驟，不是污染。
 
 ---
 
@@ -174,3 +202,47 @@ D1 與 D2 的步驟幾乎逐字相同，是本劇本主要的污染陷阱。D3 �
 | 是否過度推論版本 | T8 |
 | 資訊不足時的引導品質 | T4 |
 | 診斷行是否每輪都出現且正確 | 全部 |
+| 缺失是否限定在本次檢索 | T5 T8 |
+| 圖示來源的值是否標明出處 | T1 T5 |
+
+---
+
+## 查驗檢索紀錄
+
+建立 `skills/foundry-iq/logs/` 目錄即啟用紀錄，刪除即停用。
+
+每一輪的查詢句、回傳文件數與來源：
+
+```bash
+python3 -c "
+import json
+for i, line in enumerate(open('foundry_iq_retrievals.jsonl', encoding='utf-8'), 1):
+    r = json.loads(line)
+    print(f\"--- #{i}  {r['timestamp'][:19]}\")
+    print('   問：', r['question'])
+    print('   文件數：', len(r['documents']))
+    for ref in r['references']:
+        print('       ', ref.get('reranker_score'), ref.get('source_name'))
+"
+```
+
+某個字串是否真的來自檢索，以及它在文字層還是圖片描述：
+
+```bash
+python3 -c "
+import json, re
+pat = re.compile(r'要查的字串')
+for line in open('foundry_iq_retrievals.jsonl', encoding='utf-8'):
+    r = json.loads(line)
+    print('===', r['question'])
+    for j, d in enumerate(r['documents']):
+        m = pat.search(d['content'])
+        if not m: continue
+        s, e = max(0, m.start()-150), m.end()+150
+        kind = '圖片描述' if re.search(r'screenshot|shows |image|panel|dropdown|window', d['content'][:400], re.I) else '文字層'
+        print(f'  chunk {j} [{kind}]')
+        print('   ...' + d['content'][s:e].replace(chr(10),' ') + '...')
+"
+```
+
+零命中才代表是模型生成的。有命中就要再看它落在文字層還是圖片描述。

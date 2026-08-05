@@ -1,7 +1,7 @@
 ---
 name: foundry-iq
 description: "Use for Advantech product, command, configuration, compatibility, troubleshooting, or technical FAQ questions that must be answered from the Foundry IQ knowledge base."
-version: 1.6.0
+version: 1.7.0
 author: Hermes Agent
 license: MIT
 platforms: [linux]
@@ -91,6 +91,8 @@ This line lets a reviewer confirm that the turn was classified correctly and tha
 
 The line must describe what actually happened. A turn that carried a product model over from the previous turn is `[FOLLOW_UP]`, whatever else it may resemble; `[NEW_TOPIC]` means the question was sent as the user wrote it. A line that misreports the turn is worse than no line at all, because the whole point of it is that a reviewer can trust it.
 
+`[NEW_TOPIC]` and `[FOLLOW_UP]` both entail that a retrieval was performed. A turn answered without retrieving is `[IN_SCOPE]`. A line pairing `[FOLLOW_UP]` with 未重新查詢 contradicts itself.
+
 Write the line on its own, before the answer, with a blank line after it, so it cannot merge into the first sentence.
 
 It is a verification aid for the current phase, not a permanent part of the answer format, and is expected to be removed once the behaviour is trusted.
@@ -136,6 +138,8 @@ If the question is reasonably searchable, retrieve first. Ask for clarification 
 * If only part of the question is supported, answer only that part and identify what remains unconfirmed.
 * Do not claim that information was verified unless the retrieval actually succeeded.
 
+A retrieval returns selected passages, not whole documents, so what you did not receive is not the same as what does not exist. Report an absence as what it is: "this retrieval did not return ...", not "the document does not specify ...". When the missing detail matters, add that a differently worded question may reach it.
+
 ### Preserve exact technical details
 
 Do not alter, normalize, infer, or invent:
@@ -160,7 +164,9 @@ A terse document produces a terse answer. Do not complete a procedure the docume
 
 Do not combine commands, values, or procedures from different documents, or from different retrievals, unless the retrieved content explicitly supports the relationship.
 
-Where one document leaves a field unspecified, do not fill it with a value taken from another document. If a procedure says only "configure the security parameters", that is the whole of what is known, even when another document states specific security parameters for a similar setup.
+Where one document leaves a field unspecified, do not fill it with a value taken from another document.
+
+Before concluding that a field is unspecified, check whether the same document supplies it elsewhere in the retrieved passages, including in a figure description. A step that reads only "configure the security parameters" is often accompanied by a figure that shows the values chosen. Only when the document supplies it nowhere is the field genuinely unspecified.
 
 If documents provide conflicting instructions, describe the conflict and identify the model, version, or environment associated with each instruction.
 
@@ -170,7 +176,9 @@ A value that appears in a document as an example is not a default. Never present
 
 Never invent an example. Do not generate sample IP addresses, host names, device names, tag names, or endpoint strings that the retrieved documents do not contain. If an illustration genuinely helps, mark it plainly as your own illustration — and never attribute it to a document.
 
-Only write "the document states", "文件指出", or any equivalent when the wording is actually present in the retrieved text. This applies with equal force to claims about figures and screenshots, whose contents you cannot see.
+Only write "the document states", "文件指出", or any equivalent when the wording is actually present in the retrieved text.
+
+Some retrieved passages are not document text but a generated description of a figure or screenshot. They read like "the screenshot shows", "a red box highlights", "the tree view is expanded". A value that appears only in such a passage is second-hand twice over: a model read it off an image, and the image records one engineer's test bench. Cite it when it answers the question, but say that it comes from a figure, and treat it as that environment's example rather than as a specification. An address, credential, endpoint, or node name seen only in a screenshot is never the applicable default.
 
 If a source covers one firmware version, one channel, or one function, do not generalise the finding to all versions, channels, or settings.
 
