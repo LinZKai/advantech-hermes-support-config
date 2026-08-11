@@ -1,7 +1,7 @@
 ---
 name: foundry-iq
 description: "Use for Advantech product, command, configuration, compatibility, troubleshooting, or technical FAQ questions that must be answered from the Foundry IQ knowledge base."
-version: 1.7.0
+version: 1.8.0
 author: Hermes Agent
 license: MIT
 platforms: [linux]
@@ -128,6 +128,62 @@ A successful retrieval is not evidence of relevance. Foundry IQ returns its clos
 Review all relevant documents before answering. Pay attention to product model, hardware version, firmware version, software version, and applicable environment.
 
 If the question is reasonably searchable, retrieve first. Ask for clarification only when essential information is missing or the retrieved results are ambiguous.
+
+### Result schema (informational — for tooling, not a change to agent behavior)
+
+`query_foundry_iq.py` prints exactly one JSON object per invocation. Schema
+version `foundry-iq-result-v2` is purely additive over the original contract:
+every field an earlier consumer relied on (`ok`, `question`, `documents`,
+`references`, `activity` on success; `ok`, `error` on failure) is unchanged
+in name, meaning, and presence. This section documents the added fields for
+anything that consumes the script's output programmatically (for example, a
+feedback/telemetry pipeline that records whether a turn attempted a
+retrieval and whether it succeeded). It does not change what this skill
+instructs the agent to do — the rules above (`ok` is `true`, `documents` is
+not empty, at least one document is relevant) remain the only contract the
+agent itself needs to follow.
+
+Every result, success or failure, now also carries:
+
+* `schema_version` — always `"foundry-iq-result-v2"`.
+* `request_attempted` (bool) — whether an Azure HTTP request was actually
+  sent. `false` only for failures that never reached the network: invalid
+  input (missing/blank/too-long question) or a missing/blank Query Key.
+  `true` for a successful call and for every other failure (timeout,
+  network/HTTP failure, an unparsable response, or a well-formed response
+  with no usable documents). This is set from the script's own control
+  flow, never inferred from the process exit code.
+* `error_code` (string, or `null` when `ok` is `true`) — a stable,
+  machine-readable failure category. See the table below. A consumer
+  should branch on this, not on the human-readable `error` string.
+* `http_status` (integer, or `null`) — the HTTP status code, present only
+  when `error_code` is `http_error`; `null` in every other case (including
+  success). Always present as a key so a consumer never needs to guard the
+  lookup itself.
+
+On success, `error_code` and `http_status` are always `null` and
+`request_attempted` is always `true`.
+
+| `error_code` | Meaning | `request_attempted` | `http_status` |
+|---|---|---|---|
+| `invalid_input` | The question itself was missing, blank, or over the length limit. | `false` | `null` |
+| `missing_query_key` | `FOUNDRY_IQ_QUERY_KEY` is unset or blank. | `false` | `null` |
+| `request_timeout` | The Azure HTTP request was sent but timed out — whether the timeout happened while connecting/sending or while reading the response body. | `true` | `null` |
+| `http_error` | The Azure HTTP request was sent and a response was received, but with a non-2xx HTTP status. | `true` | the status code (e.g. `401`, `429`, `500`) |
+| `network_error` | The Azure HTTP request could not be completed at the transport layer (DNS/TLS/connection failure). No HTTP status was ever received. | `true` | `null` |
+| `invalid_response` | A response was received but did not match the expected shape (not valid JSON, not a JSON object, or a missing/empty `response` array). | `true` | `null` |
+| `no_documents` | The response was well-formed and fully parsed, but contained no usable retrieved text — a legitimate empty result, not a malfunction. | `true` | `null` |
+| `internal_error` | The script's own result payload could not be serialized. Should not occur in practice; exists only as a last-resort safety net. | matches whatever was already determined | `null` |
+
+`http_error` and `network_error` are kept distinct because they point at
+different remediation paths (a response Azure actually sent — often a
+credential or permission problem — versus a network/infrastructure issue
+where no response was ever received).
+
+A telemetry consumer of this output must never persist `documents[].content`
+— that field exists for the agent's answer, not for storage. Only
+`references[].source_name` (and the other already-redacted `references`/
+`activity` fields) are safe to retain outside the answer itself.
 
 ## Answer Rules
 
